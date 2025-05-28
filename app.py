@@ -6,26 +6,29 @@ url = "https://drive.google.com/uc?export=download&id=1FGgsRPERabERU9dh10dl6GxLa
 df = pd.read_csv(url)
 df = df.dropna(subset=["Cleaned_Ingredients", "Instructions", "Title"])
 
-ingredient_keywords = [
-    "chicken", "rice", "onion", "garlic", "tomato", "pasta", "cheese", "milk", "egg",
-    "beef", "potato", "pepper", "mushroom", "bread", "broccoli", "carrot", "spinach"
-]
+all_ingredients = set()
+for ingredients_str in df['Cleaned_Ingredients']:
+    # split by comma, strip spaces and lowercase
+    ingredients = [ing.strip().lower() for ing in ingredients_str.split(',')]
+    all_ingredients.update(ingredients)
+
+ingredient_keywords = list(all_ingredients)
 
 def extract_ingredients_from_text(text):
-    text = text.lower()
-    extracted = [word for word in ingredient_keywords if word in text]
-    return ", ".join(extracted)
+    text_ings = [ing.strip().lower() for ing in text.split(",")]
+    # keep only ingredients that are known
+    extracted = [ing for ing in text_ings if ing in ingredient_keywords]
+    return extracted
 
 def recommend_recipes(user_ingredients, top_n=5):
-    user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients.split(",")]
+    user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients]
     def score(recipe_ingredients):
         recipe_ingredients = recipe_ingredients.lower()
         return sum(1 for ing in user_ingredients if ing in recipe_ingredients)
     df["score"] = df["Cleaned_Ingredients"].apply(score)
     results = df[df["score"] > 0].sort_values(by="score", ascending=False).head(top_n)
-    results["Image_Name"] = results.get("Image_Name", "").apply(lambda x: str(x) + ".jpg" if pd.notnull(x) else "")
+    results["Image_Name"] = results["Image_Name"].apply(lambda x: x + ".jpg")
     return results
-
 app = Flask(__name__)
 
 @app.route("/", methods=["GET", "POST"])
