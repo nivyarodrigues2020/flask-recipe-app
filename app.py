@@ -3,40 +3,47 @@ from flask import Flask, request
 
 # === 1. Load dataset from Google Drive ===
 DATASET_URL = "https://drive.google.com/uc?id=1FGgsRPERabERU9dh10dl6GxLaYzme5me&export=download"
-
-# Read CSV and clean it
 df = pd.read_csv(DATASET_URL)
 df = df.dropna(subset=["Cleaned_Ingredients", "Instructions", "Title"])
 
-# === 2. Extract all known ingredients from dataset ===
+# === 2. Extract known ingredients ===
 all_ingredients = set()
-for ingredients_str in df["Cleaned_Ingredients"]:
-    ingredients = [ing.strip().lower() for ing in ingredients_str.split(",")]
+for ingredients_str in df['Cleaned_Ingredients']:
+    ingredients = [ing.strip().lower() for ing in ingredients_str.split(',')]
     all_ingredients.update(ingredients)
 
 ingredient_keywords = list(all_ingredients)
 
-# === 3. Extract only valid ingredients from user input ===
+# === 3. Extract valid ingredients from input ===
 def extract_ingredients_from_text(text):
     text_ings = [ing.strip().lower() for ing in text.split(",")]
     extracted = [ing for ing in text_ings if ing in ingredient_keywords]
-    return extracted  # returns list
+    return extracted
 
-# === 4. Recommend recipes with max matched ingredients (not strict full match) ===
+# === 4. Recommend recipes using best matching score ===
 def recommend_recipes(user_ingredients, top_n=5):
-    user_ingredients = [ing.strip().lower() for ing in user_ingredients]
+    user_ingredients_set = set(ing.strip().lower() for ing in user_ingredients)
 
-    def score(recipe_ingredients_str):
-        recipe_ings = [i.strip().lower() for i in recipe_ingredients_str.split(",")]
-        return sum(1 for ing in user_ingredients if ing in recipe_ings)
+    def get_match_score(recipe_ingredients_str):
+        recipe_ings = set(i.strip().lower() for i in recipe_ingredients_str.split(","))
+        return len(user_ingredients_set.intersection(recipe_ings))
 
-    df["score"] = df["Cleaned_Ingredients"].apply(score)
-    results = df[df["score"] > 0].sort_values(by="score", ascending=False).head(top_n)
+    df["score"] = df["Cleaned_Ingredients"].apply(get_match_score)
+    best_score = df["score"].max()
 
-    if "Image_Name" in df.columns:
-        results["Image_Name"] = results["Image_Name"].apply(lambda x: str(x) + ".jpg")
+    if best_score == 0:
+        return pd.DataFrame(), user_ingredients_set  # No match at all
 
-    return results
+    results = df[df["score"] == best_score].sort_values(by="score", ascending=False).head(top_n)
+
+    matched_ingredients = set()
+    for ingredients_str in results["Cleaned_Ingredients"]:
+        recipe_ings = set(i.strip().lower() for i in ingredients_str.split(","))
+        matched_ingredients.update(user_ingredients_set.intersection(recipe_ings))
+
+    unmatched_ingredients = user_ingredients_set - matched_ingredients
+
+    return results, unmatched_ingredients
 
 # === 5. Flask App ===
 app = Flask(__name__)
@@ -56,17 +63,14 @@ def index():
             if not extracted:
                 message = "No known ingredients found in your input."
             else:
-                known_ings = extracted
-                unknown_ings = [i for i in input_ingredients if i not in known_ings]
+                results, ignored = recommend_recipes(extracted)
 
-                warning = f"Note: These ingredients were ignored: {', '.join(unknown_ings)}<br><br>" if unknown_ings else ""
-
-                results = recommend_recipes(known_ings)
                 if results.empty:
                     message = "Sorry, no recipes found with those ingredients."
                 else:
                     recipes = results[["Title", "Cleaned_Ingredients", "Instructions"]].to_dict(orient="records")
-                    message = warning
+                    if ignored:
+                        message = f"Note: These ingredients were ignored in the best match: {', '.join(ignored)}<br><br>"
 
     html = """
     <form method="POST">
@@ -85,6 +89,6 @@ def index():
 
     return html
 
-# === 6. Run locally for testing ===
+# === 6. Run locally (optional) ===
 if __name__ == "__main__":
     app.run(debug=True)
