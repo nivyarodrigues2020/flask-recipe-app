@@ -4,3 +4,4 @@ pandas==1.5.3
 numpy==1.23.5
 pyngrok==5.1.0
 transformers==4.30.2
+Werkzeug==2.2.3
