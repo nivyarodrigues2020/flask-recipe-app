@@ -14,7 +14,9 @@ response = requests.get(DATA_URL)
 response.raise_for_status()
 df = pd.read_csv(StringIO(response.text))
 
-# Clean the dataset columns if they have list-like strings
+# -----------------------------
+# CLEAN COLUMNS (parse lists if any, lowercase)
+# -----------------------------
 def clean_column_list_str(col):
     cleaned = []
     for val in df[col]:
@@ -22,80 +24,91 @@ def clean_column_list_str(col):
             cleaned.append("")
             continue
         try:
-            # Try to parse string representation of list
             parsed = ast.literal_eval(val)
             if isinstance(parsed, list):
                 cleaned.append(", ".join(str(x).strip().lower() for x in parsed))
             else:
                 cleaned.append(str(val).strip().lower())
         except:
-            # If not a list, just lower and strip
             cleaned.append(str(val).strip().lower())
     return cleaned
 
-# Apply cleaning to ingredients column
 df['Cleaned_Ingredients'] = clean_column_list_str('Cleaned_Ingredients')
-# Also clean Title column (to lowercase for searching)
 df['Title_lower'] = df['Title'].fillna("").str.lower()
-# If you have a 'recipe' or 'Instructions' column, you can add similar cleanups if needed
+# If you have a 'Recipe' column (else use 'Instructions')
+if 'Recipe' in df.columns:
+    df['Recipe_lower'] = df['Recipe'].fillna("").str.lower()
+else:
+    df['Recipe_lower'] = df['Instructions'].fillna("").str.lower()
 
 # -----------------------------
-# PREPARE INGREDIENT KEYWORDS
+# BUILD MASTER KEYWORD LIST from Ingredients, Title, Recipe
 # -----------------------------
-all_ingredients = set()
+all_keywords = set()
+
+# from Cleaned_Ingredients column
 for ingredients_str in df['Cleaned_Ingredients']:
     for ing in ingredients_str.split(','):
         ing = ing.strip()
         if ing:
-            all_ingredients.add(ing)
+            all_keywords.add(ing)
 
-ingredient_keywords = list(all_ingredients)
+# from Title column (split on space and commas)
+for title in df['Title_lower']:
+    for word in title.replace(",", " ").split():
+        word = word.strip()
+        if word:
+            all_keywords.add(word)
+
+# from Recipe/Instructions column (split on space and commas)
+for recipe_text in df['Recipe_lower']:
+    for word in recipe_text.replace(",", " ").split():
+        word = word.strip()
+        if word:
+            all_keywords.add(word)
+
+keyword_list = list(all_keywords)
 
 # -----------------------------
 # HELPER FUNCTIONS
 # -----------------------------
 
 def extract_ingredients_from_text(text):
-    # Extract user input ingredients, normalize to lowercase and strip spaces
-    text_ings = [ing.strip().lower() for ing in text.split(",") if ing.strip()]
-    # Only keep known ingredients
-    extracted = [ing for ing in text_ings if ing in ingredient_keywords]
+    """
+    Extract words from user input that appear in master keyword list.
+    """
+    user_ings = [ing.strip().lower() for ing in text.split(",") if ing.strip()]
+    extracted = [ing for ing in user_ings if ing in all_keywords]
     return extracted
 
 def recommend_recipes(user_ingredients, top_n=5):
-    user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients]
+    user_ingredients = [ing.strip().lower() for ing in user_ingredients]
 
-    # Define scoring function: sum of matches in ingredients or in title
     def score(row):
-        score = 0
-        # Combine ingredients and title for matching
-        combined_text = row['Cleaned_Ingredients'] + " " + row['Title_lower']
+        combined_text = row['Cleaned_Ingredients'] + " " + row['Title_lower'] + " " + row['Recipe_lower']
+        score_val = 0
         for ing in user_ingredients:
             if ing in combined_text:
-                score += 1
-        return score
+                score_val += 1
+        return score_val
 
-    df["score"] = df.apply(score, axis=1)
-    results = df[df["score"] > 0].sort_values(by="score", ascending=False).head(top_n)
+    df['score'] = df.apply(score, axis=1)
+    results = df[df['score'] > 0].sort_values(by='score', ascending=False).head(top_n)
 
-    # Determine ignored ingredients
-    if results.empty:
-        ignored = user_ingredients
-    else:
-        matched = set()
-        for ing in user_ingredients:
-            # Check if ingredient appears in any result's ingredients or title
-            if any(ing in (row['Cleaned_Ingredients'] + " " + row['Title_lower']) for _, row in results.iterrows()):
-                matched.add(ing)
-        ignored = [ing for ing in user_ingredients if ing not in matched]
+    # Find which user ingredients were matched in any recipe result
+    matched = set()
+    for ing in user_ingredients:
+        if any(ing in (row['Cleaned_Ingredients'] + " " + row['Title_lower'] + " " + row['Recipe_lower']) for _, row in results.iterrows()):
+            matched.add(ing)
 
-    # Clean columns for display (remove extra quotes/brackets if any)
+    ignored = [ing for ing in user_ingredients if ing not in matched]
+
+    # Clean output columns for display: capitalize ingredients, strip whitespace
     results_display = results.copy()
-    # Ingredients already cleaned; just capitalize first letter for display maybe
-    results_display["Cleaned_Ingredients"] = results_display["Cleaned_Ingredients"].apply(
-        lambda x: ", ".join([i.strip().capitalize() for i in x.split(",")])
+    results_display['Cleaned_Ingredients'] = results_display['Cleaned_Ingredients'].apply(
+        lambda x: ", ".join([i.strip().capitalize() for i in x.split(",") if i.strip()])
     )
-    results_display["Instructions"] = results_display["Instructions"].fillna("").str.strip()
+    results_display['Instructions'] = results_display['Instructions'].fillna("").str.strip()
 
     return results_display, ignored
 
@@ -112,7 +125,6 @@ def index():
         user_input = request.form.get("ingredients", "")
         if user_input:
             extracted = extract_ingredients_from_text(user_input)
-
             if not extracted:
                 message = "No known ingredients found in your input."
             else:
