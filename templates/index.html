@@ -1,80 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Recipe Finder</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recipe Recommendations</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f6f8fa;
             padding: 20px;
+            background: #f9f9f9;
         }
-        h1 {
-            text-align: center;
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+            cursor: pointer;
+            padding: 15px;
+            transition: background 0.3s ease;
+        }
+        .card:hover {
+            background: #f0f0f0;
+        }
+        .card-title {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .card-content {
+            margin-top: 10px;
+            display: none;
+            font-size: 0.95em;
             color: #333;
         }
-        form {
-            text-align: center;
-            margin-bottom: 30px;
+        .card-content.visible {
+            display: block;
         }
-        input[type="text"] {
-            width: 60%;
-            padding: 10px;
-            font-size: 16px;
-        }
-        input[type="submit"] {
-            padding: 10px 20px;
-            font-size: 16px;
-            margin-left: 10px;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        .message {
-            color: #d9534f;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .recipe-card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .recipe-card h2 {
-            margin-top: 0;
-        }
-        .instructions {
-            max-height: 150px;
-            overflow-y: auto;
-            background-color: #f9f9f9;
-            padding: 10px;
-            border-radius: 5px;
+        .ingredients {
+            margin-bottom: 8px;
         }
     </style>
 </head>
 <body>
-    <h1>Recipe Finder 🍽️</h1>
-
-    <form method="POST">
-        <input type="text" name="ingredients" placeholder="Enter ingredients (comma-separated)">
-        <input type="submit" value="Find Recipes">
-    </form>
+    <h1>Recipe Recommendations</h1>
 
     {% if message %}
-        <div class="message">{{ message | safe }}</div>
+    <p><strong>{{ message }}</strong></p>
     {% endif %}
 
     {% for recipe in recipes %}
-        <div class="recipe-card">
-            <h2>{{ recipe.Title }}</h2>
-            <p><strong>Ingredients:</strong> {{ recipe.Cleaned_Ingredients }}</p>
-            <div class="instructions">
-                <strong>Instructions:</strong><br>
-                {{ recipe.Instructions }}
+    <div class="card" onclick="toggleCard(this)">
+        <div class="card-title">{{ recipe.Name }}</div>
+        <div class="card-content">
+            <div class="ingredients"><strong>Ingredients:</strong>
+                <ul>
+                {% for ing in recipe.Cleaned_Ingredients %}
+                    <li>{{ ing }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+            <div class="instructions"><strong>Instructions:</strong>
+                <p>{{ recipe.Instructions }}</p>
             </div>
         </div>
+    </div>
     {% endfor %}
+
+    <script>
+        function toggleCard(card) {
+            const content = card.querySelector('.card-content');
+            content.classList.toggle('visible');
+        }
+    </script>
 </body>
 </html>
