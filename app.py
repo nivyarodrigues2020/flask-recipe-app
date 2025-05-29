@@ -2,7 +2,7 @@ from flask import Flask, request, render_template
 import pandas as pd
 import requests
 from io import StringIO
-from nltk.stem import PorterStemmer
+
 
 app = Flask(__name__)
 stemmer = PorterStemmer()
