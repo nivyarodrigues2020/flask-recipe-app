@@ -3,77 +3,53 @@ import pandas as pd
 import requests
 from io import StringIO
 
-
 app = Flask(__name__)
-stemmer = PorterStemmer()
 
-# ----------------------------- #
-#           HELPERS            #
-# ----------------------------- #
-
-def clean_ingredient_string(ingredient_str):
-    try:
-        ingredient_str = ingredient_str.encode('latin1').decode('utf-8')
-    except:
-        pass
-    garbage_chars = ['Â', '½', '¼', '¾', '–', '”', '“', '™']
-    for char in garbage_chars:
-        ingredient_str = ingredient_str.replace(char, '')
-    return ingredient_str
-
-def stem_words(text):
-    return " ".join([stemmer.stem(word) for word in text.split()])
-
-# ----------------------------- #
-#       LOAD THE DATASET       #
-# ----------------------------- #
-
+# -----------------------------
+# LOAD THE DATASET
+# -----------------------------
 DATA_URL = "https://drive.google.com/uc?export=download&id=1FGgsRPERabERU9dh10dl6GxLaYzme5me"
 response = requests.get(DATA_URL)
 response.raise_for_status()
 df = pd.read_csv(StringIO(response.text))
 
-# Clean and collect ingredient keywords
+# -----------------------------
+# PREPARE INGREDIENT KEYWORDS
+# -----------------------------
 all_ingredients = set()
 for ingredients_str in df['Cleaned_Ingredients']:
-    ingredients_str = clean_ingredient_string(ingredients_str)
     ingredients = [ing.strip().lower() for ing in ingredients_str.split(',')]
     all_ingredients.update(ingredients)
 
 ingredient_keywords = list(all_ingredients)
 
-# ----------------------------- #
-#        CORE FUNCTIONS        #
-# ----------------------------- #
-
+# -----------------------------
+# HELPER FUNCTIONS
+# -----------------------------
 def extract_ingredients_from_text(text):
     text_ings = [ing.strip().lower() for ing in text.split(",")]
-    stemmed_keywords = [stem_words(ing) for ing in ingredient_keywords]
-    extracted = []
-    for user_ing in text_ings:
-        stemmed_user_ing = stem_words(user_ing)
-        if stemmed_user_ing in stemmed_keywords:
-            extracted.append(user_ing)
+    extracted = [ing for ing in text_ings if ing in ingredient_keywords]
     return extracted
 
 def recommend_recipes(user_ingredients, top_n=5):
     user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients]
-    user_ingredients_stemmed = [stem_words(ing) for ing in user_ingredients]
 
     def score(recipe_ingredients):
-        recipe_ingredients = clean_ingredient_string(recipe_ingredients.lower())
-        recipe_ingredients_stemmed = stem_words(recipe_ingredients)
-        return sum(1 for ing in user_ingredients_stemmed if ing in recipe_ingredients_stemmed)
+        recipe_ingredients = recipe_ingredients.lower()
+        return sum(1 for ing in user_ingredients if ing in recipe_ingredients)
 
     df["score"] = df["Cleaned_Ingredients"].apply(score)
     results = df[df["score"] > 0].sort_values(by="score", ascending=False).head(top_n)
 
-    matched = set()
-    for ing in user_ingredients:
-        ing_stem = stem_words(ing)
-        if any(ing_stem in stem_words(clean_ingredient_string(r.lower())) for r in results["Cleaned_Ingredients"]):
-            matched.add(ing)
-    ignored = [ing for ing in user_ingredients if ing not in matched]
+    best_score = results["score"].max() if not results.empty else 0
+    if best_score == 0:
+        ignored = user_ingredients
+    else:
+        matched = set()
+        for ing in user_ingredients:
+            if any(ing in r.lower() for r in results["Cleaned_Ingredients"]):
+                matched.add(ing)
+        ignored = [ing for ing in user_ingredients if ing not in matched]
 
     if not results.empty:
         results = results.copy()
@@ -81,10 +57,9 @@ def recommend_recipes(user_ingredients, top_n=5):
         results["Instructions"] = results["Instructions"].apply(lambda x: x.strip())
     return results, ignored
 
-# ----------------------------- #
-#           FLASK              #
-# ----------------------------- #
-
+# -----------------------------
+# FLASK ROUTES
+# -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
     recipes = []
@@ -101,9 +76,6 @@ def index():
                 results, ignored = recommend_recipes(extracted)
                 if results.empty:
                     message = "Sorry, no recipes found with those ingredients."
-                    if extracted:
-                        ignored_str = ", ".join(extracted)
-                        message += f"<br>Note: All ingredients were ignored or unmatched: {ignored_str}"
                 else:
                     recipes = results[["Title", "Cleaned_Ingredients", "Instructions"]].to_dict(orient="records")
                     if ignored:
@@ -112,5 +84,8 @@ def index():
 
     return render_template("index.html", recipes=recipes, message=message)
 
+# -----------------------------
+# RUN THE APP
+# -----------------------------
 if __name__ == "__main__":
     app.run(debug=True)
