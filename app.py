@@ -28,7 +28,7 @@ for idx, row in df.iterrows():
     title_words = [w.strip().lower() for w in title_str.split() if w.strip()]
     all_keywords.update(title_words)
 
-    recipe_str = str(row['Recipe']) if pd.notna(row['Recipe']) else ""
+    recipe_str = str(row['Instructions']) if pd.notna(row['Recipe']) else ""
     recipe_words = [w.strip().lower() for w in recipe_str.split() if w.strip()]
     all_keywords.update(recipe_words)
 
