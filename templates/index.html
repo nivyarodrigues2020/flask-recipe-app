@@ -3,150 +3,125 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Recipe Recommendations</title>
+  <title>RecipeBot</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
-      background: #f7f7f7;
+      background: #fafafa;
+      padding: 30px;
+      color: #333;
     }
     h1 {
       text-align: center;
+      margin-bottom: 5px;
+    }
+    .intro-text {
+      text-align: center;
       margin-bottom: 20px;
+      font-style: italic;
+      color: #555;
+      font-size: 1.1em;
+    }
+    form {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    input[type="text"] {
+      width: 300px;
+      padding: 8px;
+      font-size: 1em;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      padding: 8px 15px;
+      font-size: 1em;
+      margin-left: 10px;
+      cursor: pointer;
+      border: none;
+      background-color: #5c8df6;
+      color: white;
+      border-radius: 5px;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #3a64d8;
     }
     .message {
       text-align: center;
+      font-weight: bold;
       margin-bottom: 20px;
-      font-size: 1.1em;
-      color: #cc0000;
-    }
-    .welcome-text {
-      max-width: 700px;
-      margin: 0 auto 15px auto;
-      font-size: 1.15em;
-      color: #333;
-      text-align: center;
-      font-style: italic;
+      color: #b33;
     }
     .card {
-      background: #fff;
-      border-radius: 8px;
-      padding: 15px 20px;
-      margin-bottom: 15px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      background: white;
       max-width: 700px;
-      margin-left: auto;
-      margin-right: auto;
-      cursor: pointer;
-      user-select: none;
-      transition: box-shadow 0.3s ease;
-      color: #222; /* make text dark */
-    }
-    .card:hover {
-      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+      margin: 15px auto;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
     .recipe-title {
+      font-size: 1.5em;
       font-weight: bold;
-      font-size: 1.4em;
-      color: #222;
-    }
-    .details {
-      margin-top: 15px;
-      display: none;
-      color: #444;
-      line-height: 1.5;
-    }
-    .details strong {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: bold;
-      color: #222;
-    }
-    .details ul {
-      list-style-type: disc;
-      padding-left: 20px;
       margin-bottom: 15px;
-      font-size: 0.95em;
+      color: #222;
     }
-    .details ul li {
+    .ingredients, .instructions {
+      margin-bottom: 15px;
+      line-height: 1.4;
+    }
+    .ingredients ul {
+      padding-left: 20px;
+      margin: 0;
+    }
+    .ingredients li {
       margin-bottom: 5px;
     }
-    form {
-      max-width: 700px;
-      margin: 0 auto 40px auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      align-items: center;
-    }
-    input[type="text"] {
-      width: 100%;
-      padding: 10px;
-      font-size: 1em;
-      border: 1px solid #ddd;
-      border-radius: 5px;
-      box-sizing: border-box;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 1em;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background-color 0.3s ease;
-      width: 150px;
-    }
-    button:hover {
-      background-color: #0056b3;
+    img.recipe-image {
+      max-width: 100%;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      display: block;
     }
   </style>
 </head>
 <body>
-  <h1>Recipe Recommendations</h1>
-
-  {% if message %}
-  <div class="message">{{ message }}</div>
-  {% endif %}
-
-  <form method="POST" action="/">
-    <div class="welcome-text">
-      I am your RecipeBot. Hungry? Say no more. Enter the ingredients you have and let us see you cook.
-    </div>
+  <h1>RecipeBot</h1>
+  <div class="intro-text">
+    I am your RecipeBot. Hungry? Say no more. Enter the ingredients you have and let us see you cook.
+  </div>
+  <form method="post" action="/">
     <input type="text" name="ingredients" placeholder="Enter ingredients separated by commas" required />
-    <button type="submit">Search</button>
+    <button type="submit">Find Recipes</button>
   </form>
 
+  {% if message %}
+    <div class="message">{{ message }}</div>
+  {% endif %}
+
   {% for recipe in recipes %}
-  <div class="card" onclick="toggleDetails(this)">
-    <div class="recipe-title">{{ recipe.Name }}</div>
-    <div class="details">
-      <div>
+    <div class="card">
+      <div class="recipe-title">{{ recipe.Recipe_Name }}</div>
+
+      {% if recipe.Image_Name %}
+      <img class="recipe-image" src="{{ url_for('static', filename='images/' + recipe.Image_Name) }}" alt="{{ recipe.Recipe_Name }}" />
+      {% endif %}
+
+      <div class="ingredients">
         <strong>Ingredients:</strong>
         <ul>
-          {% for ing in recipe.Cleaned_Ingredients %}
-          <li>{{ ing }}</li>
+          {% for ing in recipe.Cleaned_Ingredients.split(',') %}
+            <li>{{ ing.strip() }}</li>
           {% endfor %}
         </ul>
       </div>
-      <div>
+
+      <div class="instructions">
         <strong>Instructions:</strong>
         <p>{{ recipe.Instructions }}</p>
       </div>
     </div>
-  </div>
   {% endfor %}
-
-  <script>
-    function toggleDetails(card) {
-      const details = card.querySelector('.details');
-      if (details.style.display === 'block') {
-        details.style.display = 'none';
-      } else {
-        details.style.display = 'block';
-      }
-    }
-  </script>
 </body>
 </html>
