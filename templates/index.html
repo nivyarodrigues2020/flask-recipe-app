@@ -1,127 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RecipeBot</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #fafafa;
-      padding: 30px;
-      color: #333;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 5px;
-    }
-    .intro-text {
-      text-align: center;
-      margin-bottom: 20px;
-      font-style: italic;
-      color: #555;
-      font-size: 1.1em;
-    }
-    form {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    input[type="text"] {
-      width: 300px;
-      padding: 8px;
-      font-size: 1em;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
-    button {
-      padding: 8px 15px;
-      font-size: 1em;
-      margin-left: 10px;
-      cursor: pointer;
-      border: none;
-      background-color: #5c8df6;
-      color: white;
-      border-radius: 5px;
-      transition: background-color 0.3s ease;
-    }
-    button:hover {
-      background-color: #3a64d8;
-    }
-    .message {
-      text-align: center;
-      font-weight: bold;
-      margin-bottom: 20px;
-      color: #b33;
-    }
-    .card {
-      background: white;
-      max-width: 700px;
-      margin: 15px auto;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    .recipe-title {
-      font-size: 1.5em;
-      font-weight: bold;
-      margin-bottom: 15px;
-      color: #222;
-    }
-    .ingredients, .instructions {
-      margin-bottom: 15px;
-      line-height: 1.4;
-    }
-    .ingredients ul {
-      padding-left: 20px;
-      margin: 0;
-    }
-    .ingredients li {
-      margin-bottom: 5px;
-    }
-    img.recipe-image {
-      max-width: 100%;
-      border-radius: 8px;
-      margin-bottom: 15px;
-      display: block;
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RecipeBot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #fafafa;
+            margin: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 0;
+        }
+        p#welcome-text {
+            text-align: center;
+            font-size: 1.2em;
+            margin-top: 5px;
+            margin-bottom: 25px;
+            color: #555;
+        }
+        form {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        input[type="text"] {
+            width: 60%;
+            padding: 10px;
+            font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            margin-left: 10px;
+            cursor: pointer;
+            border-radius: 6px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+        }
+        .message {
+            text-align: center;
+            color: #900;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .recipes-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            width: 300px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: box-shadow 0.3s ease;
+            user-select: none;
+        }
+        .card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .card-header {
+            padding: 15px;
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2em;
+            border-radius: 10px 10px 0 0;
+        }
+        .card-content {
+            padding: 15px;
+            display: none;
+            color: #333;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .card-content ul {
+            padding-left: 20px;
+        }
+        .card-content ul li {
+            margin-bottom: 6px;
+        }
+        .card-content p {
+            white-space: pre-wrap; /* keeps line breaks in instructions */
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+    </style>
 </head>
 <body>
-  <h1>RecipeBot</h1>
-  <div class="intro-text">
-    I am your RecipeBot. Hungry? Say no more. Enter the ingredients you have and let us see you cook.
-  </div>
-  <form method="post" action="/">
-    <input type="text" name="ingredients" placeholder="Enter ingredients separated by commas" required />
-    <button type="submit">Find Recipes</button>
-  </form>
+    <h1>RecipeBot</h1>
+    <p id="welcome-text">I am your RecipeBot. Hungry? Say no more. Enter the ingredients you have and let us see you cook.</p>
 
-  {% if message %}
+    <form method="POST" action="/">
+        <input type="text" name="ingredients" placeholder="Enter ingredients separated by commas" required
+            value="{{ request.form.ingredients if request.method == 'POST' else '' }}">
+        <button type="submit">Find Recipes</button>
+    </form>
+
+    {% if message %}
     <div class="message">{{ message }}</div>
-  {% endif %}
+    {% endif %}
 
-  {% for recipe in recipes %}
-    <div class="card">
-      <div class="recipe-title">{{ recipe.Recipe_Name }}</div>
-
-      {% if recipe.Image_Name %}
-      <img class="recipe-image" src="{{ url_for('static', filename='images/' + recipe.Image_Name) }}" alt="{{ recipe.Recipe_Name }}" />
-      {% endif %}
-
-      <div class="ingredients">
-        <strong>Ingredients:</strong>
-        <ul>
-          {% for ing in recipe.Cleaned_Ingredients.split(',') %}
-            <li>{{ ing.strip() }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-
-      <div class="instructions">
-        <strong>Instructions:</strong>
-        <p>{{ recipe.Instructions }}</p>
-      </div>
+    {% if recipes %}
+    <div class="recipes-container">
+        {% for recipe in recipes.itertuples() %}
+        <div class="card">
+            <div class="card-header">{{ recipe.Recipe_Name }}</div>
+            <div class="card-content">
+                <strong>Ingredients:</strong>
+                <ul>
+                    {% for ing in recipe.Cleaned_Ingredients.split(',') %}
+                    <li>{{ ing.strip() }}</li>
+                    {% endfor %}
+                </ul>
+                <strong>Instructions:</strong>
+                <p>{{ recipe.Instructions }}</p>
+            </div>
+        </div>
+        {% endfor %}
     </div>
-  {% endfor %}
+    {% endif %}
+
+    <script>
+        // Add click toggle for each card
+        document.querySelectorAll('.card').forEach(card => {
+            card.addEventListener('click', () => {
+                const content = card.querySelector('.card-content');
+                if (content.style.display === "block") {
+                    content.style.display = "none";
+                } else {
+                    content.style.display = "block";
+                }
+            });
+        });
+    </script>
 </body>
 </html>
