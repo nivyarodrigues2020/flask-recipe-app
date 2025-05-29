@@ -21,15 +21,18 @@ all_keywords = set()
 
 for idx, row in df.iterrows():
     # Ingredients
-    ingredients = [ing.strip().lower() for ing in row['Cleaned_Ingredients'].split(",")]
+   ingredients_str = str(row['Cleaned_Ingredients']) if pd.notna(row['Cleaned_Ingredients']) else ""
+    ingredients = [ing.strip().lower() for ing in ingredients_str.split(",") if ing.strip()]
     all_keywords.update(ingredients)
 
     # Title keywords
-    title_words = [w.strip().lower() for w in row['Title'].split()]
+   title_str = str(row['Title']) if pd.notna(row['Title']) else ""
+    title_words = [w.strip().lower() for w in title_str.split() if w.strip()]
     all_keywords.update(title_words)
 
     # Recipe / Instructions keywords
-    recipe_words = [w.strip().lower() for w in str(row['Instructions']).split()]
+    recipe_str = str(row['Recipe']) if pd.notna(row['Instructions']) else ""
+recipe_words = [w.strip().lower() for w in recipe_str.split() if w.strip()]
     all_keywords.update(recipe_words)
 
 ingredient_keywords = list(all_keywords)
