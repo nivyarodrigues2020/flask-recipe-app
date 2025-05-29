@@ -29,7 +29,7 @@ for idx, row in df.iterrows():
     all_keywords.update(title_words)
 
     # Recipe / Instructions keywords
-    recipe_words = [w.strip().lower() for w in str(row['Recipe']).split()]
+    recipe_words = [w.strip().lower() for w in str(row['Instructions']).split()]
     all_keywords.update(recipe_words)
 
 ingredient_keywords = list(all_keywords)
@@ -51,7 +51,7 @@ def recommend_recipes(user_ingredients, top_n=5):
         combined_text = (
             row['Cleaned_Ingredients'].lower() + " " + 
             row['Title'].lower() + " " + 
-            str(row['Recipe']).lower()
+            str(row['Instructions']).lower()
         )
         return all(ing in combined_text for ing in user_ingredients)
 
@@ -72,3 +72,33 @@ def recommend_recipes(user_ingredients, top_n=5):
     ignored = []  # No ignored ingredients since all matched
 
     return results
+# -----------------------------
+# FLASK ROUTES
+# -----------------------------
+@app.route("/", methods=["GET", "POST"])
+def index():
+    recipes = []
+    message = ""
+
+    if request.method == "POST":
+        user_input = request.form.get("ingredients", "")
+        if user_input:
+            extracted = extract_ingredients_from_text(user_input)
+
+            if not extracted:
+                message = "No known ingredients found in your input."
+            else:
+                results, ignored = recommend_recipes(extracted)
+                if results.empty:
+                    message = "No recipe found having all ingredients entered, please enter again."
+                else:
+                    recipes = results[["Title", "Cleaned_Ingredients", "Instructions"]].to_dict(orient="records")
+                    # ignored will be empty here because all matched
+
+    return render_template("index.html", recipes=recipes, message=message)
+
+# -----------------------------
+# RUN THE APP
+# -----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
