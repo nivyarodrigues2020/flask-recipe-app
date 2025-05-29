@@ -2,145 +2,137 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RecipeBot</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: #fafafa;
             margin: 20px;
-            color: #333;
+            background: #f9f9f9;
         }
         h1 {
-            text-align: center;
-            margin-bottom: 0;
+            color: #333;
+            margin-bottom: 5px;
         }
-        p#welcome-text {
-            text-align: center;
-            font-size: 1.2em;
-            margin-top: 5px;
-            margin-bottom: 25px;
+        .intro-text {
+            margin-bottom: 15px;
+            font-size: 1.1em;
             color: #555;
         }
         form {
-            text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
         input[type="text"] {
-            width: 60%;
-            padding: 10px;
+            width: 400px;
+            padding: 8px;
             font-size: 1em;
             border: 1px solid #ccc;
-            border-radius: 6px;
+            border-radius: 4px;
         }
         button {
-            padding: 10px 20px;
+            padding: 8px 15px;
             font-size: 1em;
-            margin-left: 10px;
-            cursor: pointer;
-            border-radius: 6px;
             border: none;
-            background-color: #007bff;
+            background-color: #007BFF;
             color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
         }
         .message {
-            text-align: center;
-            color: #900;
+            color: #d9534f; /* bootstrap danger red */
             margin-bottom: 20px;
             font-weight: bold;
         }
-        .recipes-container {
+        .cards-container {
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
-            gap: 20px;
+            gap: 15px;
         }
         .card {
             background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
             width: 300px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             cursor: pointer;
             transition: box-shadow 0.3s ease;
-            user-select: none;
         }
         .card:hover {
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
         .card-header {
             padding: 15px;
-            background-color: #007bff;
-            color: white;
             font-weight: bold;
             font-size: 1.2em;
-            border-radius: 10px 10px 0 0;
+            color: #007BFF;
+            border-bottom: 1px solid #ddd;
         }
         .card-content {
-            padding: 15px;
             display: none;
+            padding: 15px;
             color: #333;
-            max-height: 400px;
-            overflow-y: auto;
+            font-size: 0.95em;
+            line-height: 1.4em;
         }
         .card-content ul {
             padding-left: 20px;
+            margin: 8px 0;
         }
-        .card-content ul li {
-            margin-bottom: 6px;
-        }
-        .card-content p {
-            white-space: pre-wrap; /* keeps line breaks in instructions */
-            margin-top: 10px;
-            line-height: 1.4;
+        .card-content li {
+            margin-bottom: 5px;
         }
     </style>
 </head>
 <body>
-    <h1>RecipeBot</h1>
-    <p id="welcome-text">I am your RecipeBot. Hungry? Say no more. Enter the ingredients you have and let us see you cook.</p>
 
-    <form method="POST" action="/">
-        <input type="text" name="ingredients" placeholder="Enter ingredients separated by commas" required
-            value="{{ request.form.ingredients if request.method == 'POST' else '' }}">
-        <button type="submit">Find Recipes</button>
+    <h1>Recipe Recommendations</h1>
+
+    <div class="intro-text">
+        I am your RecipeBot. Hungry? Say no more. Enter the ingredients you have and let us see you cook.
+    </div>
+
+    <form method="POST">
+        <input type="text" name="ingredients" placeholder="Enter ingredients separated by commas" required />
+        <button type="submit">Search</button>
     </form>
 
     {% if message %}
     <div class="message">{{ message }}</div>
     {% endif %}
 
-    {% if recipes %}
-    <div class="recipes-container">
-        {% for recipe in recipes.itertuples() %}
-        <div class="card">
-            <div class="card-header">{{ recipe.Recipe_Name }}</div>
+    <div class="cards-container">
+        {% for recipe in recipes %}
+        <div class="card" onclick="toggleCard(this)">
+            <div class="card-header">{{ recipe['Recipe_Name'] }}</div>
             <div class="card-content">
                 <strong>Ingredients:</strong>
                 <ul>
-                    {% for ing in recipe.Cleaned_Ingredients.split(',') %}
-                    <li>{{ ing.strip() }}</li>
+                    {% for ing in recipe['Cleaned_Ingredients'].split(',') %}
+                        <li>{{ ing.strip() }}</li>
                     {% endfor %}
                 </ul>
                 <strong>Instructions:</strong>
-                <p>{{ recipe.Instructions }}</p>
+                <p>{{ recipe['Instructions'] }}</p>
             </div>
         </div>
         {% endfor %}
     </div>
-    {% endif %}
 
-    <script>
-        // Add click toggle for each card
-        document.querySelectorAll('.card').forEach(card => {
-            card.addEventListener('click', () => {
-                const content = card.querySelector('.card-content');
-                if (content.style.display === "block") {
-                    content.style.display = "none";
-                } else {
-                    content.style.display = "block";
-                }
-            });
-        });
-    </script>
+<script>
+function toggleCard(card) {
+    const content = card.querySelector('.card-content');
+    if (content.style.display === 'block') {
+        content.style.display = 'none';
+    } else {
+        content.style.display = 'block';
+        // Optional: scroll card into view
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+</script>
+
 </body>
 </html>
