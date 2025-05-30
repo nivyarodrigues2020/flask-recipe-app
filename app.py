@@ -138,21 +138,30 @@ def chat():
 
     # State machine for chatbot conversation:
     if state == "awaiting_ingredients":
-        # Extract ingredients from user message
-        extracted = extract_ingredients_from_text(user_input)
-        all_user_ings = [ing.strip().lower() for ing in user_input.split(",")]
-        ignored_ingredients = [ing for ing in all_user_ings if ing not in extracted]
+    # Step 1: Clean user input
+    all_user_ings = [ing.strip().lower() for ing in user_input.split(",") if ing.strip()]
+    
+    # Step 2: Recommend a recipe based on all user ingredients (as-is)
+    recipe = recommend_one_recipe(all_user_ings)
+    if not recipe:
+        return jsonify({"reply": "Sorry, I couldn't find any recipe matching those ingredients."})
 
-        if not extracted:
-            return jsonify({"reply": "No known ingredients found. Please try again with different ingredients."})
+    # Step 3: Get ingredients from the recommended recipe
+    recipe_ings = recipe.get("Ingredients", [])
+    
+    # Step 4: Find ingredients user gave that are NOT in the recipe
+    ignored_ingredients = [ing for ing in all_user_ings if ing not in recipe_ings]
 
-        recipe = recommend_one_recipe(extracted)
-        if not recipe:
-            return jsonify({"reply": "Sorry, I couldn't find any recipe matching those ingredients."})
+    # Step 5: Build reply message
+    reply_text = f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
+    if ignored_ingredients:
+        reply_text += f"\n\nNote: I ignored these ingredients as they are not in the recipe: {', '.join(ignored_ingredients)}"
 
-        reply_text = f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
-        if ignored_ingredients:
-            reply_text += f"\n\nNote: I ignored these ingredients as I don't have matching recipes for them: {', '.join(ignored_ingredients)}"
+    # Step 6: Save state and return
+    session["suggested_recipe"] = recipe
+    session["state"] = "awaiting_confirmation"
+
+    return jsonify({"reply": reply_text})
 
         # Save recipe in session and ask for confirmation
         session["suggested_recipe"] = recipe
