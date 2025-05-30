@@ -14,8 +14,7 @@ response.raise_for_status()
 df = pd.read_csv(StringIO(response.text))
 
 # -----------------------------
-# PREPARE MASTER KEYWORDS SET
-# from ingredients, title, and recipe columns (lowercased)
+# PREPARE INGREDIENT KEYWORDS
 # -----------------------------
 all_keywords = set()
 
@@ -37,41 +36,29 @@ ingredient_keywords = list(all_keywords)
 # -----------------------------
 # HELPER FUNCTIONS
 # -----------------------------
-
 def extract_ingredients_from_text(text):
-    # Extract user input ingredients that appear in master keywords
-    text_ings = [ing.strip().lower() for ing in text.split(",")]
+    text_ings = [ing.strip().lower() for ing in text.split(",") if ing.strip()]
     extracted = [ing for ing in text_ings if ing in ingredient_keywords]
-    return extracted
+    ignored = [ing for ing in text_ings if ing not in ingredient_keywords]
+    return extracted, ignored
 
 def recommend_recipes(user_ingredients, top_n=5):
-    user_ingredients = [ing.strip().lower() for ing in user_ingredients]
+    user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients]
 
-    def contains_all(row):
-        combined_text = (
-            row['Cleaned_Ingredients'].lower() + " " + 
-            row['Title'].lower() + " " + 
-            str(row['Instructions']).lower()
-        )
-        return all(ing in combined_text for ing in user_ingredients)
+    def score(row):
+        recipe_ings = str(row['Cleaned_Ingredients']).lower() if pd.notna(row['Cleaned_Ingredients']) else ""
+        return all(ing in recipe_ings for ing in user_ingredients)
 
-    filtered_df = df[df.apply(contains_all, axis=1)]
+    matches = df[df.apply(score, axis=1)]
 
-    if filtered_df.empty:
-        # No full matches found
-        return pd.DataFrame(), user_ingredients  # All ingredients considered ignored here
+    if matches.empty:
+        return pd.DataFrame(), user_ingredients
+    
+    matches = matches.copy()
+    matches["Cleaned_Ingredients"] = matches["Cleaned_Ingredients"].apply(lambda x: str(x).strip())
+    matches["Instructions"] = matches["Instructions"].apply(lambda x: str(x).strip())
+    return matches.head(top_n), []
 
-    results = filtered_df.head(top_n).copy()
-
-    # Clean ingredients string for display
-    results['Cleaned_Ingredients'] = results['Cleaned_Ingredients'].apply(
-        lambda x: ", ".join([i.strip().capitalize() for i in x.split(",") if i.strip()])
-    )
-    results['Instructions'] = results['Instructions'].fillna("").str.strip()
-
-    ignored = []  # No ignored ingredients since all matched
-
-    return results
 # -----------------------------
 # FLASK ROUTES
 # -----------------------------
@@ -83,17 +70,21 @@ def index():
     if request.method == "POST":
         user_input = request.form.get("ingredients", "")
         if user_input:
-            extracted = extract_ingredients_from_text(user_input)
+            extracted, truly_ignored = extract_ingredients_from_text(user_input)
 
             if not extracted:
                 message = "No known ingredients found in your input."
             else:
-                results, ignored = recommend_recipes(extracted)
+                results, unmatched = recommend_recipes(extracted)
+
                 if results.empty:
-                    message = "No recipe found having all ingredients entered, please enter again."
+                    message = "No recipe found having all ingredients entered. Please enter again."
                 else:
                     recipes = results[["Title", "Cleaned_Ingredients", "Instructions"]].to_dict(orient="records")
-                    # ignored will be empty here because all matched
+                    ignored = truly_ignored + unmatched
+                    if ignored:
+                        ignored_str = ", ".join(set(ignored))
+                        message = f"Note: These ingredients were not matched in any recipe: {ignored_str}<br><br>"
 
     return render_template("index.html", recipes=recipes, message=message)
 
