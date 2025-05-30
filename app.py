@@ -137,7 +137,7 @@ def chat():
         session.pop("suggested_recipe", None)
 
     # State machine for chatbot conversation:
-    if state = "awaiting_ingredients":
+    if state == "awaiting_ingredients":
     # Step 1: Clean user input
     all_user_ings = [ing.strip().lower() for ing in user_input.split(",") if ing.strip()]
     
