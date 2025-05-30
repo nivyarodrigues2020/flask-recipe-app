@@ -2,6 +2,7 @@ from flask import Flask, request, render_template
 import pandas as pd
 import requests
 from io import StringIO
+import re
 
 app = Flask(__name__)
 
@@ -14,50 +15,53 @@ response.raise_for_status()
 df = pd.read_csv(StringIO(response.text))
 
 # -----------------------------
+# CLEAN DATASET
+# -----------------------------
+def clean_ingredient_text(text):
+    if pd.isna(text):
+        return ""
+    # Remove unwanted characters and decode common artifacts
+    text = str(text)
+    text = re.sub(r"[\[\]\'\"]", "", text)  # Remove brackets and quotes
+    text = text.encode("latin1").decode("utf-8", errors="ignore")  # Fix encoding
+    text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
+    return text.lower()
+
+for col in ['Cleaned_Ingredients', 'Title', 'Recipe']:
+    df[col] = df[col].apply(clean_ingredient_text)
+
+# -----------------------------
 # PREPARE INGREDIENT KEYWORDS
 # -----------------------------
-all_keywords = set()
+all_ingredients = set()
+for col in ['Cleaned_Ingredients', 'Title', 'Recipe']:
+    for row in df[col].dropna():
+        words = re.split(r'[,\s]+', str(row).lower())
+        all_ingredients.update([word.strip() for word in words if word.strip().isalpha()])
 
-for idx, row in df.iterrows():
-    ingredients_str = str(row['Cleaned_Ingredients']) if pd.notna(row['Cleaned_Ingredients']) else ""
-    ingredients = [ing.strip().lower() for ing in ingredients_str.split(",") if ing.strip()]
-    all_keywords.update(ingredients)
-
-    title_str = str(row['Title']) if pd.notna(row['Title']) else ""
-    title_words = [w.strip().lower() for w in title_str.split() if w.strip()]
-    all_keywords.update(title_words)
-
-    recipe_str = str(row['Instructions']) if pd.notna(row['Instructions']) else ""
-    recipe_words = [w.strip().lower() for w in recipe_str.split() if w.strip()]
-    all_keywords.update(recipe_words)
-
-ingredient_keywords = list(all_keywords)
+ingredient_keywords = list(all_ingredients)
 
 # -----------------------------
 # HELPER FUNCTIONS
 # -----------------------------
 def extract_ingredients_from_text(text):
-    text_ings = [ing.strip().lower() for ing in text.split(",") if ing.strip()]
+    text_ings = [ing.strip().lower() for ing in text.split(",")]
     extracted = [ing for ing in text_ings if ing in ingredient_keywords]
-    ignored = [ing for ing in text_ings if ing not in ingredient_keywords]
-    return extracted, ignored
+    return extracted, text_ings  # return both cleaned and raw list
 
-def recommend_recipes(user_ingredients, top_n=5):
-    user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients]
+def recommend_recipes(user_ingredients):
+    # Match only recipes that include ALL user ingredients
+    def recipe_has_all_ingredients(row):
+        recipe_text = " ".join([
+            str(row["Cleaned_Ingredients"]) if pd.notna(row["Cleaned_Ingredients"]) else "",
+            str(row["Title"]) if pd.notna(row["Title"]) else "",
+            str(row["Recipe"]) if pd.notna(row["Instructions"]) else ""
+        ]).lower()
+        return all(ing in recipe_text for ing in user_ingredients)
 
-    def score(row):
-        recipe_ings = str(row['Cleaned_Ingredients']).lower() if pd.notna(row['Cleaned_Ingredients']) else ""
-        return all(ing in recipe_ings for ing in user_ingredients)
+    matched_recipes = df[df.apply(recipe_has_all_ingredients, axis=1)].copy()
 
-    matches = df[df.apply(score, axis=1)]
-
-    if matches.empty:
-        return pd.DataFrame(), user_ingredients
-    
-    matches = matches.copy()
-    matches["Cleaned_Ingredients"] = matches["Cleaned_Ingredients"].apply(lambda x: str(x).strip())
-    matches["Instructions"] = matches["Instructions"].apply(lambda x: str(x).strip())
-    return matches.head(top_n), []
+    return matched_recipes
 
 # -----------------------------
 # FLASK ROUTES
@@ -70,21 +74,26 @@ def index():
     if request.method == "POST":
         user_input = request.form.get("ingredients", "")
         if user_input:
-            extracted, truly_ignored = extract_ingredients_from_text(user_input)
+            extracted, original = extract_ingredients_from_text(user_input)
 
             if not extracted:
                 message = "No known ingredients found in your input."
             else:
-                results, unmatched = recommend_recipes(extracted)
+                results = recommend_recipes(extracted)
 
                 if results.empty:
-                    message = "No recipe found having all ingredients entered. Please enter again."
+                    message = "No recipe found having all ingredients entered, please enter again."
                 else:
-                    recipes = results[["Title", "Cleaned_Ingredients", "Instructions"]].to_dict(orient="records")
-                    ignored = truly_ignored + unmatched
-                    if ignored:
-                        ignored_str = ", ".join(set(ignored))
-                        message = f"Note: These ingredients were not matched in any recipe: {ignored_str}<br><br>"
+                    recipes = results[["Title", "Cleaned_Ingredients", "Instructions"]].copy()
+                    recipes["Cleaned_Ingredients"] = recipes["Cleaned_Ingredients"].apply(clean_ingredient_text)
+                    recipes["Instructions"] = recipes["Instructions"].apply(clean_ingredient_text)
+                    recipes = recipes.to_dict(orient="records")
+
+                # Compute ignored ingredients
+                ignored = [ing for ing in original if ing not in extracted]
+                if ignored:
+                    ignored_str = ", ".join(ignored)
+                    message += f"<br>Note: These ingredients were not found and ignored: {ignored_str}"
 
     return render_template("index.html", recipes=recipes, message=message)
 
