@@ -7,6 +7,15 @@ import ast
 app = Flask(__name__)
 
 # -----------------------------
+# INSTRUCTION PHRASES TO IGNORE IN INGREDIENTS
+# -----------------------------
+instruction_phrases = {
+    "divided", "plus more", "melted", "room temperature", "torn into", "thinly sliced",
+    "cut into", "cored", "minced", "chopped", "freshly ground", "pinch of",
+    "about", "to taste", "as needed", "optional", "pinch", "sliced", "diced"
+}
+
+# -----------------------------
 # LOAD THE DATASET
 # -----------------------------
 DATA_URL = "https://drive.google.com/uc?export=download&id=1FGgsRPERabERU9dh10dl6GxLaYzme5me"
@@ -20,7 +29,7 @@ df = pd.read_csv(StringIO(response.text))
 def parse_ingredient_list(ingredients_str):
     """
     Parses stringified Python list of ingredients into a clean Python list.
-    Cleans newlines and extra spaces.
+    Cleans newlines, extra spaces, and filters out instruction-like words.
     """
     if pd.isna(ingredients_str) or not str(ingredients_str).strip():
         return []
@@ -36,9 +45,12 @@ def parse_ingredient_list(ingredients_str):
     cleaned = []
     for ing in ingredients:
         if isinstance(ing, str):
-            ing = ing.replace('\n', ' ').replace('\r', ' ').strip()
-            if ing:
-                cleaned.append(ing.lower())
+            ing_clean = ing.replace('\n', ' ').replace('\r', ' ').strip().lower()
+            if ing_clean:
+                # Skip if contains any instruction phrase
+                if any(phrase in ing_clean for phrase in instruction_phrases):
+                    continue
+                cleaned.append(ing_clean)
     return cleaned
 
 # -----------------------------
