@@ -137,7 +137,7 @@ def chat():
         session.pop("suggested_recipe", None)
 
     # State machine for chatbot conversation:
-    if state == "awaiting_ingredients":
+    if state = "awaiting_ingredients":
     # Step 1: Clean user input
     all_user_ings = [ing.strip().lower() for ing in user_input.split(",") if ing.strip()]
     
@@ -162,12 +162,6 @@ def chat():
     session["state"] = "awaiting_confirmation"
 
     return jsonify({"reply": reply_text})
-
-        # Save recipe in session and ask for confirmation
-        session["suggested_recipe"] = recipe
-        session["state"] = "awaiting_confirmation"
-
-        return jsonify({"reply": reply_text})
 
     elif state == "awaiting_confirmation":
         if user_input in ["ok", "yes", "yeah", "yup", "sure"]:
