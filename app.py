@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, jsonify
 import pandas as pd
 import requests
 from io import StringIO
@@ -11,8 +11,8 @@ app = Flask(__name__)
 # -----------------------------
 instruction_phrases = {
     "divided", "plus more", "melted", "room temperature", "torn into", "thinly sliced",
-    "cut into", "cored", "minced", "chopped", "freshly ground", "pinch of",
-    "about", "to taste", "as needed", "optional", "pinch", "sliced", "diced"
+    "cut into", "cored", "minced", "chopped", "freshly ground", "pinch of", "about",
+    "to taste", "as needed", "optional", "pinch", "sliced", "diced"
 }
 
 # -----------------------------
@@ -150,29 +150,32 @@ def recommend_recipes(user_ingredients, top_n=5):
 # -----------------------------
 # FLASK ROUTES
 # -----------------------------
-@app.route("/", methods=["GET", "POST"])
+@app.route("/")
 def index():
-    recipes = []
-    message = ""
+    return render_template("chat.html")
 
-    if request.method == "POST":
-        user_input = request.form.get("ingredients", "")
-        if user_input:
-            extracted = extract_ingredients_from_text(user_input)
+@app.route("/chat", methods=["POST"])
+def chat():
+    user_input = request.json.get("message", "")
+    if not user_input.strip():
+        return jsonify({"reply": "Please enter some ingredients."})
 
-            if not extracted:
-                message = "No known ingredients found in your input."
-            else:
-                results, ignored = recommend_recipes(extracted)
-                if not results:
-                    message = "No recipe found containing all ingredients entered, please try again."
-                else:
-                    recipes = results
-                    if ignored:
-                        ignored_str = ", ".join(ignored)
-                        message = f"Note: These ingredients were ignored in the best match: {ignored_str}"
+    extracted = extract_ingredients_from_text(user_input)
+    if not extracted:
+        return jsonify({"reply": "No known ingredients found. Please try again."})
 
-    return render_template("index.html", recipes=recipes, message=message)
+    results, ignored = recommend_recipes(extracted)
+    if not results:
+        return jsonify({"reply": "No recipes found with those ingredients."})
+
+    reply = ""
+    if ignored:
+        reply += f"Note: These ingredients were ignored: {', '.join(ignored)}.\n\n"
+
+    for i, recipe in enumerate(results, 1):
+        reply += f"{i}. {recipe['Title']}\nIngredients: {recipe['Cleaned_Ingredients']}\nInstructions: {recipe['Instructions']}\n\n"
+
+    return jsonify({"reply": reply.strip()})
 
 # -----------------------------
 # RUN THE APP
