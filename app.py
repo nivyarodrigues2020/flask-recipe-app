@@ -155,7 +155,7 @@ def chat():
         session["suggested_recipe"] = recipe
         session["state"] = "awaiting_confirmation"
 
-        return jsonify({"reply": f"How about making **{recipe['Title']}** today? Please reply with 'ok' or 'no'."})
+        return jsonify({"reply": f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."})
 
     elif state == "awaiting_confirmation":
         if user_input in ["ok", "yes", "yeah", "yup", "sure"]:
