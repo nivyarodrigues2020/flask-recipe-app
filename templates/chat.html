@@ -1,138 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Recipe Chatbot</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #f0f2f5;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    margin: 0;
-  }
-  #chatbox {
-    flex-grow: 1;
-    padding: 20px;
-    overflow-y: auto;
-    background: white;
-    border: 1px solid #ddd;
-    margin: 20px auto;
-    width: 90%;
-    max-width: 600px;
-    border-radius: 8px;
-  }
-  .message {
-    margin-bottom: 15px;
-    max-width: 80%;
-    padding: 10px 15px;
-    border-radius: 15px;
-    clear: both;
-  }
-  .user-message {
-    background-color: #0084ff;
-    color: white;
-    float: right;
-    text-align: right;
-  }
-  .bot-message {
-    background-color: #e5e5ea;
-    color: black;
-    float: left;
-    text-align: left;
-    white-space: pre-line; /* preserve line breaks */
-  }
-  #input-area {
-    width: 90%;
-    max-width: 600px;
-    margin: 0 auto 20px auto;
-    display: flex;
-  }
-  #user-input {
-    flex-grow: 1;
-    padding: 12px 15px;
-    border-radius: 25px;
-    border: 1px solid #ccc;
-    font-size: 16px;
-  }
-  #send-btn {
-    background-color: #0084ff;
-    border: none;
-    color: white;
-    font-weight: bold;
-    padding: 12px 20px;
-    margin-left: 10px;
-    border-radius: 25px;
-    cursor: pointer;
-  }
-  #send-btn:hover {
-    background-color: #006fcc;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Recipe Bot Chat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #ffd194 0%, #70e1f5 100%);
+      font-family: 'Nunito', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    #chat-container {
+      background: #fff;
+      width: 400px;
+      max-width: 90vw;
+      height: 600px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+      background: #fafafa;
+    }
+    .message {
+      max-width: 75%;
+      padding: 12px 16px;
+      border-radius: 20px;
+      line-height: 1.4;
+      font-size: 15px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .user {
+      align-self: flex-end;
+      background: #70e1f5;
+      color: #0a3d62;
+      border-bottom-right-radius: 0;
+      position: relative;
+    }
+    .bot {
+      align-self: flex-start;
+      background: #f9a826;
+      color: #3e2723;
+      border-bottom-left-radius: 0;
+      position: relative;
+    }
+    /* little speech bubble pointers */
+    .user::after {
+      content: '🧑‍🍳';
+      position: absolute;
+      right: -26px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 18px;
+    }
+    .bot::after {
+      content: '🤖';
+      position: absolute;
+      left: -26px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 18px;
+    }
+    form {
+      display: flex;
+      border-top: 1px solid #ddd;
+      background: #fff;
+    }
+    input[type="text"] {
+      flex: 1;
+      border: none;
+      padding: 14px 16px;
+      font-size: 16px;
+      font-family: inherit;
+      border-radius: 0 0 0 16px;
+      outline: none;
+    }
+    button {
+      background: #f9a826;
+      border: none;
+      padding: 0 20px;
+      cursor: pointer;
+      font-size: 18px;
+      color: #3e2723;
+      border-radius: 0 0 16px 0;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background: #f57c00;
+      color: white;
+    }
+    #typing-indicator {
+      font-style: italic;
+      color: #999;
+      margin-left: 10px;
+      height: 24px;
+      user-select: none;
+    }
+  </style>
 </head>
 <body>
+  <div id="chat-container">
+    <div id="messages"></div>
+    <div id="typing-indicator"></div>
+    <form id="chat-form" autocomplete="off">
+      <input type="text" id="user-input" placeholder="Enter ingredients like 'chicken, rice' 🍗🍚" />
+      <button type="submit">Send</button>
+    </form>
+  </div>
 
-<div id="chatbox"></div>
+  <script>
+    const messages = document.getElementById("messages");
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("user-input");
+    const typingIndicator = document.getElementById("typing-indicator");
 
-<div id="input-area">
-  <input type="text" id="user-input" placeholder="Type your ingredients or reply here..." autocomplete="off" />
-  <button id="send-btn">Send</button>
-</div>
-
-<script>
-  const chatbox = document.getElementById('chatbox');
-  const userInput = document.getElementById('user-input');
-  const sendBtn = document.getElementById('send-btn');
-
-  function appendMessage(text, sender) {
-    const msgDiv = document.createElement('div');
-    msgDiv.classList.add('message');
-    msgDiv.classList.add(sender === 'user' ? 'user-message' : 'bot-message');
-    msgDiv.textContent = text;
-    chatbox.appendChild(msgDiv);
-    chatbox.scrollTop = chatbox.scrollHeight;
-  }
-
-  async function sendMessage() {
-    const message = userInput.value.trim();
-    if (!message) return;
-    appendMessage(message, 'user');
-    userInput.value = '';
-    userInput.disabled = true;
-    sendBtn.disabled = true;
-
-    try {
-      const response = await fetch('/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({message})
-      });
-      const data = await response.json();
-      appendMessage(data.reply, 'bot');
-    } catch (err) {
-      appendMessage("Sorry, something went wrong. Please try again.", 'bot');
+    function appendMessage(text, sender) {
+      const div = document.createElement("div");
+      div.classList.add("message", sender);
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
     }
 
-    userInput.disabled = false;
-    sendBtn.disabled = false;
-    userInput.focus();
-  }
-
-  sendBtn.addEventListener('click', sendMessage);
-
-  userInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      sendMessage();
-    }
-  });
+      const userText = input.value.trim();
+      if (!userText) return;
 
-  // Optional: greet the user on load
-  appendMessage("Hi! Tell me what ingredients you have, and I'll suggest a recipe.", 'bot');
-  userInput.focus();
-</script>
+      appendMessage(userText, "user");
+      input.value = "";
+      typingIndicator.textContent = "Bot is typing... ⏳";
 
+      try {
+        const response = await fetch("/chat", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({message: userText})
+        });
+        const data = await response.json();
+        typingIndicator.textContent = "";
+
+        appendMessage(data.reply, "bot");
+      } catch (err) {
+        typingIndicator.textContent = "";
+        appendMessage("Oops! Something went wrong. 😞", "bot");
+      }
+    });
+
+    // Optional: greet user on page load
+    window.onload = () => {
+      appendMessage("Hello! 👋 I am your Recipe Bot. Tell me what ingredients you have!", "bot");
+    };
+  </script>
 </body>
 </html>
