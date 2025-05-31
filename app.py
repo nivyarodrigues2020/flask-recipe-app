@@ -6,10 +6,8 @@ import ast
 import os
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"  # needed for session support
+app.secret_key = "supersecretkey"
 
-# -----------------------------
-# INSTRUCTION PHRASES TO IGNORE IN INGREDIENTS
 # -----------------------------
 instruction_phrases = {
     "divided", "plus more", "melted", "room temperature", "torn into", "thinly sliced",
@@ -17,17 +15,11 @@ instruction_phrases = {
     "to taste", "as needed", "optional", "pinch", "sliced", "diced"
 }
 
-# -----------------------------
-# LOAD THE DATASET
-# -----------------------------
 DATA_URL = "https://drive.google.com/uc?export=download&id=1FGgsRPERabERU9dh10dl6GxLaYzme5me"
 response = requests.get(DATA_URL)
 response.raise_for_status()
 df = pd.read_csv(StringIO(response.text))
 
-# -----------------------------
-# HELPER FUNCTION TO PARSE INGREDIENT LIST STRINGS
-# -----------------------------
 def parse_ingredient_list(ingredients_str):
     if pd.isna(ingredients_str) or not str(ingredients_str).strip():
         return []
@@ -49,38 +41,42 @@ def parse_ingredient_list(ingredients_str):
                 cleaned.append(ing_clean)
     return cleaned
 
-# -----------------------------
-# PREPARE MASTER KEYWORD LIST FROM INGREDIENTS + TITLE + RECIPE COLUMNS
-# -----------------------------
+# Build global keyword list
 all_keywords = set()
-
 for idx, row in df.iterrows():
     ingredients_list = parse_ingredient_list(row.get('Cleaned_Ingredients', ""))
     all_keywords.update(ingredients_list)
 
     title = row.get('Title', "")
     if pd.notna(title):
-        for word in title.lower().split():
-            all_keywords.add(word.strip())
+        all_keywords.update(title.lower().split())
 
     recipe_text = row.get('Instructions', "")
     if pd.notna(recipe_text):
-        for word in recipe_text.lower().split():
-            all_keywords.add(word.strip())
+        all_keywords.update(recipe_text.lower().split())
 
-ingredient_keywords = list(all_keywords)
+# Clean keyword list
+ingredient_keywords = [kw.strip().lower() for kw in all_keywords if isinstance(kw, str) and kw.strip()]
 
 # -----------------------------
-# EXTRACT INGREDIENTS FROM USER INPUT (modified)
+# IMPROVED INGREDIENT MATCHING
 # -----------------------------
 def extract_ingredients_from_text(text):
     text_ings = [ing.strip().lower() for ing in text.split(",")]
-    extracted = [ing for ing in text_ings if ing in ingredient_keywords]
-    ignored = [ing for ing in text_ings if ing not in ingredient_keywords]
+    extracted = []
+    ignored = []
+
+    for ing in text_ings:
+        found = any(ing in keyword for keyword in ingredient_keywords)
+        if found:
+            extracted.append(ing)
+        else:
+            ignored.append(ing)
+
     return extracted, ignored
 
 # -----------------------------
-# RECOMMEND ONE BEST MATCHING RECIPE (modified)
+# RECOMMEND ONE BEST MATCHING RECIPE
 # -----------------------------
 def recommend_one_recipe(user_ingredients):
     user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients]
@@ -90,17 +86,12 @@ def recommend_one_recipe(user_ingredients):
 
     def contains_all_ingredients(row):
         recipe_ings = recipe_ingredients_list(row)
-        return all(ing in recipe_ings for ing in user_ingredients)
+        return all(any(ing in recipe_ing for recipe_ing in recipe_ings) for ing in user_ingredients)
 
     full_match_df = df[df.apply(contains_all_ingredients, axis=1)]
 
-    matched_ingredients = []
-    ignored_ingredients = []
-
     if not full_match_df.empty:
         best = full_match_df.iloc[0]
-        matched_ingredients = user_ingredients
-        ignored_ingredients = []
     else:
         def score(row):
             combined_text = " ".join([
@@ -113,23 +104,16 @@ def recommend_one_recipe(user_ingredients):
         df['score'] = df.apply(score, axis=1)
         partial_matches = df[df['score'] > 0].sort_values(by='score', ascending=False)
         if partial_matches.empty:
-            return None, user_ingredients, []
-
+            return None
         best = partial_matches.iloc[0]
-        recipe_ings = recipe_ingredients_list(best)
-        matched_ingredients = [ing for ing in user_ingredients if ing in recipe_ings]
-        ignored_ingredients = [ing for ing in user_ingredients if ing not in matched_ingredients]
 
     return {
         "Title": best.get('Title', ''),
         "Ingredients": parse_ingredient_list(best['Cleaned_Ingredients']),
         "Instructions": best.get('Instructions', '').strip()
-    }, matched_ingredients, ignored_ingredients
+    }
 
 # -----------------------------
-# FLASK ROUTES
-# -----------------------------
-
 @app.route("/")
 def index():
     return render_template("chat.html")
@@ -152,29 +136,28 @@ def chat():
         if not extracted:
             return jsonify({"reply": "No known ingredients found. Please try again with different ingredients."})
 
-        recipe, matched, not_found_in_recipe = recommend_one_recipe(extracted)
+        recipe = recommend_one_recipe(extracted)
         if not recipe:
             return jsonify({"reply": "Sorry, I couldn't find any recipe matching those ingredients."})
 
+        used = ", ".join(extracted)
+        ignored_msg = ""
+        if ignored:
+            ignored_list = ", ".join(ignored)
+            ignored_msg = f"But I couldn't find anything with: {ignored_list}.\n"
+
+        response = f"I found a recipe using {used}.\n{ignored_msg}How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
+
         session["suggested_recipe"] = recipe
         session["state"] = "awaiting_confirmation"
-
-        matched_str = ", ".join(matched)
-        ignored_str = ", ".join(not_found_in_recipe)
-
-        if ignored_str:
-            response = f"I found a recipe using {matched_str}.\nBut I couldn't find anything with: {ignored_str}.\nHow about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
-        else:
-            response = f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
-
         return jsonify({"reply": response})
 
     elif state == "awaiting_confirmation":
         if user_input in ["ok", "yes", "yeah", "yup", "sure"]:
             session["state"] = "awaiting_show_ingredients"
             recipe = suggested_recipe
-            ingredients_text = "\n- ".join(recipe.get("Ingredients", []))
-            return jsonify({"reply": f"Great! Here are the ingredients:\n- {ingredients_text}\n\nDo you want to see the recipe instructions now? (yes/no)"})
+            ingredients_text = "\n- " + "\n- ".join(recipe.get("Ingredients", []))
+            return jsonify({"reply": f"Great! Here are the ingredients:{ingredients_text}\n\nDo you want to see the recipe instructions now? (yes/no)"})
         elif user_input in ["no", "nah", "nope"]:
             reset_session()
             return jsonify({"reply": "Okay, no problem! What ingredients do you have instead?"})
@@ -191,14 +174,10 @@ def chat():
             return jsonify({"reply": "Alright! If you want another recipe, just type your ingredients."})
         else:
             return jsonify({"reply": "Please reply with 'yes' or 'no'."})
-
     else:
         reset_session()
         return jsonify({"reply": "Let's start fresh! What ingredients do you have?"})
 
-# -----------------------------
-# RUN THE APP
-# -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
