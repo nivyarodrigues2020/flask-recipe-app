@@ -97,10 +97,14 @@ def recommend_one_recipe(user_ingredients):
     if not full_match_df.empty:
         best = full_match_df.iloc[0]
     else:
-        # fallback to partial match with scoring (exact ingredient matching only)
+        # fallback to partial match with scoring
         def score(row):
-            recipe_ings = set(recipe_ingredients_list(row))
-            return sum(1 for ing in user_ingredients if ing in recipe_ings)
+            combined_text = " ".join([
+                " ".join(recipe_ingredients_list(row)),
+                str(row.get('Title', '')).lower(),
+                str(row.get('Instructions', '')).lower()
+            ])
+            return sum(1 for ing in user_ingredients if ing in combined_text)
 
         df['score'] = df.apply(score, axis=1)
         partial_matches = df[df['score'] > 0].sort_values(by='score', ascending=False)
@@ -117,6 +121,7 @@ def recommend_one_recipe(user_ingredients):
 # -----------------------------
 # FLASK ROUTES
 # -----------------------------
+
 @app.route("/")
 def index():
     return render_template("chat.html")
@@ -137,39 +142,27 @@ def chat():
 
     # State machine for chatbot conversation:
     if state == "awaiting_ingredients":
-        # Step 1: Clean user input
-        all_user_ings = [ing.strip().lower() for ing in user_input.split(",") if ing.strip()]
+        # Extract ingredients from user message
+        extracted = extract_ingredients_from_text(user_input)
+        if not extracted:
+            return jsonify({"reply": "No known ingredients found. Please try again with different ingredients."})
 
-        # Step 2: Recommend a recipe based on all user ingredients (as-is)
-        recipe = recommend_one_recipe(all_user_ings)
+        recipe = recommend_one_recipe(extracted)
         if not recipe:
             return jsonify({"reply": "Sorry, I couldn't find any recipe matching those ingredients."})
 
-        # Step 3: Get ingredients from the recommended recipe
-        recipe_ings = recipe.get("Ingredients", [])
-
-        # Step 4: Find ingredients user gave that are NOT in the recipe
-        ignored_ingredients = [ing for ing in all_user_ings if ing not in recipe_ings]
-
-        # Step 5: Build reply message
-        reply_text = f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
-        if ignored_ingredients:
-            reply_text += f"\n\nNote: I ignored these ingredients as they are not in the recipe: {', '.join(ignored_ingredients)}"
-
-        # Step 6: Save state and return
+        # Save recipe in session and ask for confirmation
         session["suggested_recipe"] = recipe
         session["state"] = "awaiting_confirmation"
 
-        return jsonify({"reply": reply_text})
+        return jsonify({"reply": f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."})
 
     elif state == "awaiting_confirmation":
         if user_input in ["ok", "yes", "yeah", "yup", "sure"]:
             session["state"] = "awaiting_show_ingredients"
             recipe = suggested_recipe
             ingredients_text = "\n- ".join(recipe.get("Ingredients", []))
-            return jsonify({
-                "reply": f"Great! Here are the ingredients:\n- {ingredients_text}\n\nDo you want to see the recipe instructions now? (yes/no)"
-            })
+            return jsonify({"reply": f"Great! Here are the ingredients:\n- {ingredients_text}\n\nDo you want to see the recipe instructions now? (yes/no)"})
         elif user_input in ["no", "nah", "nope"]:
             reset_session()
             return jsonify({"reply": "Okay, no problem! What ingredients do you have instead?"})
@@ -180,9 +173,7 @@ def chat():
         if user_input in ["yes", "y", "sure", "yeah"]:
             recipe = suggested_recipe
             session["state"] = "done"
-            return jsonify({
-                "reply": f"Here are the instructions:\n{recipe.get('Instructions', '')}\n\nIf you'd like another recipe, just type your ingredients."
-            })
+            return jsonify({"reply": f"Here are the instructions:\n{recipe.get('Instructions', '')}\n\nIf you'd like another recipe, just type your ingredients."})
         elif user_input in ["no", "n", "nope"]:
             reset_session()
             return jsonify({"reply": "Alright! If you want another recipe, just type your ingredients."})
