@@ -71,15 +71,16 @@ for idx, row in df.iterrows():
 ingredient_keywords = list(all_keywords)
 
 # -----------------------------
-# EXTRACT INGREDIENTS FROM USER INPUT
+# EXTRACT INGREDIENTS FROM USER INPUT (modified)
 # -----------------------------
 def extract_ingredients_from_text(text):
     text_ings = [ing.strip().lower() for ing in text.split(",")]
     extracted = [ing for ing in text_ings if ing in ingredient_keywords]
-    return extracted
+    ignored = [ing for ing in text_ings if ing not in ingredient_keywords]
+    return extracted, ignored
 
 # -----------------------------
-# RECOMMEND ONE BEST MATCHING RECIPE (modified)
+# RECOMMEND ONE BEST MATCHING RECIPE
 # -----------------------------
 def recommend_one_recipe(user_ingredients):
     user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients]
@@ -143,7 +144,7 @@ def chat():
     # State machine for chatbot conversation:
     if state == "awaiting_ingredients":
         # Extract ingredients from user message
-        extracted = extract_ingredients_from_text(user_input)
+        extracted, ignored = extract_ingredients_from_text(user_input)
         if not extracted:
             return jsonify({"reply": "No known ingredients found. Please try again with different ingredients."})
 
@@ -151,11 +152,17 @@ def chat():
         if not recipe:
             return jsonify({"reply": "Sorry, I couldn't find any recipe matching those ingredients."})
 
+        # Build response
+        response = f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
+        if ignored:
+            ignored_list = ", ".join(ignored)
+            response = f"Note: I couldn't recognize these ingredients and ignored them: {ignored_list}.\n\n" + response
+
         # Save recipe in session and ask for confirmation
         session["suggested_recipe"] = recipe
         session["state"] = "awaiting_confirmation"
 
-        return jsonify({"reply": f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."})
+        return jsonify({"reply": response})
 
     elif state == "awaiting_confirmation":
         if user_input in ["ok", "yes", "yeah", "yup", "sure"]:
