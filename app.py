@@ -80,7 +80,7 @@ def extract_ingredients_from_text(text):
     return extracted, ignored
 
 # -----------------------------
-# RECOMMEND ONE BEST MATCHING RECIPE
+# RECOMMEND ONE BEST MATCHING RECIPE (modified)
 # -----------------------------
 def recommend_one_recipe(user_ingredients):
     user_ingredients = [ingredient.strip().lower() for ingredient in user_ingredients]
@@ -88,17 +88,20 @@ def recommend_one_recipe(user_ingredients):
     def recipe_ingredients_list(row):
         return parse_ingredient_list(row['Cleaned_Ingredients'])
 
-    # First try to find full matches (contain all user ingredients)
     def contains_all_ingredients(row):
         recipe_ings = recipe_ingredients_list(row)
         return all(ing in recipe_ings for ing in user_ingredients)
 
     full_match_df = df[df.apply(contains_all_ingredients, axis=1)]
 
+    matched_ingredients = []
+    ignored_ingredients = []
+
     if not full_match_df.empty:
         best = full_match_df.iloc[0]
+        matched_ingredients = user_ingredients
+        ignored_ingredients = []
     else:
-        # fallback to partial match with scoring
         def score(row):
             combined_text = " ".join([
                 " ".join(recipe_ingredients_list(row)),
@@ -110,14 +113,18 @@ def recommend_one_recipe(user_ingredients):
         df['score'] = df.apply(score, axis=1)
         partial_matches = df[df['score'] > 0].sort_values(by='score', ascending=False)
         if partial_matches.empty:
-            return None
+            return None, user_ingredients, []
+
         best = partial_matches.iloc[0]
+        recipe_ings = recipe_ingredients_list(best)
+        matched_ingredients = [ing for ing in user_ingredients if ing in recipe_ings]
+        ignored_ingredients = [ing for ing in user_ingredients if ing not in matched_ingredients]
 
     return {
         "Title": best.get('Title', ''),
         "Ingredients": parse_ingredient_list(best['Cleaned_Ingredients']),
         "Instructions": best.get('Instructions', '').strip()
-    }
+    }, matched_ingredients, ignored_ingredients
 
 # -----------------------------
 # FLASK ROUTES
@@ -133,7 +140,6 @@ def chat():
     if not user_input:
         return jsonify({"reply": "Please enter some ingredients."})
 
-    # Get current conversation state from session
     state = session.get("state", "awaiting_ingredients")
     suggested_recipe = session.get("suggested_recipe")
 
@@ -141,26 +147,25 @@ def chat():
         session.pop("state", None)
         session.pop("suggested_recipe", None)
 
-    # State machine for chatbot conversation:
     if state == "awaiting_ingredients":
-        # Extract ingredients from user message
         extracted, ignored = extract_ingredients_from_text(user_input)
         if not extracted:
             return jsonify({"reply": "No known ingredients found. Please try again with different ingredients."})
 
-        recipe = recommend_one_recipe(extracted)
+        recipe, matched, not_found_in_recipe = recommend_one_recipe(extracted)
         if not recipe:
             return jsonify({"reply": "Sorry, I couldn't find any recipe matching those ingredients."})
 
-        # Build response
-        response = f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
-        if ignored:
-            ignored_list = ", ".join(ignored)
-            response = f"Note: I couldn't recognize these ingredients and ignored them: {ignored_list}.\n\n" + response
-
-        # Save recipe in session and ask for confirmation
         session["suggested_recipe"] = recipe
         session["state"] = "awaiting_confirmation"
+
+        matched_str = ", ".join(matched)
+        ignored_str = ", ".join(not_found_in_recipe)
+
+        if ignored_str:
+            response = f"I found a recipe using {matched_str}.\nBut I couldn't find anything with: {ignored_str}.\nHow about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
+        else:
+            response = f"How about making {recipe['Title']} today? Please reply with 'ok' or 'no'."
 
         return jsonify({"reply": response})
 
@@ -188,7 +193,6 @@ def chat():
             return jsonify({"reply": "Please reply with 'yes' or 'no'."})
 
     else:
-        # Reset if unknown state or done
         reset_session()
         return jsonify({"reply": "Let's start fresh! What ingredients do you have?"})
 
